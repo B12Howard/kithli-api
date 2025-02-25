@@ -162,15 +162,15 @@ func CreateUserHandler(db *sql.DB, firebaseClient *firebase.FirebaseClient) http
 				return
 			}
 
-			link, err := firebaseClient.FirebaseAuth.EmailVerificationLink(ctx, email)
-			if err != nil {
-				log.Println("[ERROR] Failed to generate verification link:", err)
-				http.Error(w, "Failed to send verification email", http.StatusInternalServerError)
-				return
-			}
+			// link, err := firebaseClient.FirebaseAuth.EmailVerificationLink(ctx, email)
+			// if err != nil {
+			// 	log.Println("[ERROR] Failed to generate verification link:", err)
+			// 	http.Error(w, "Failed to send verification email", http.StatusInternalServerError)
+			// 	return
+			// }
 
 			// TODO: Send `link` via your email provider (e.g., SendGrid, SMTP)
-			log.Printf("[INFO] Verification email link generated: %s", link)
+			// log.Printf("[INFO] Verification email link generated: %s", link)
 
 			email = req.Email
 			firebaseUID = user.UID
