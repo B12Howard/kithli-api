@@ -1,0 +1,15 @@
+# VSCode
+.vscode
+
+out/*
+!out/.index
+config.json
+.env
+serviceAccountKey.json
+gcpStorageAccountKey.json
+/tmp
+kithli-api
+
+# exported data
+.DS_Store
+firebase.json
