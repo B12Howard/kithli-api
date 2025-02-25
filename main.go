@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
+	"github.com/pressly/goose/v3"
 )
 
 type MyHandler struct {
@@ -32,6 +33,10 @@ func main() {
 	}
 
 	db := config.NewDb()
+
+	if err := goose.Up(db, "db/migrations"); err != nil {
+		log.Fatal("Migration failed:", err)
+	}
 
 	// fmt.Print("Hello world")
 
