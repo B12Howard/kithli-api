@@ -34,8 +34,10 @@ func NewDb() *sql.DB {
 	}
 
 	// Create the PostgreSQL connection string
-	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-		host, port, user, password, dbname)
+	psqlInfo := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=require prefer_simple_protocol=1",
+		host, port, user, password, dbname,
+	)
 
 	// Connect to the database
 	db, err := sql.Open("postgres", psqlInfo)
