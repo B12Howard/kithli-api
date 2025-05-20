@@ -97,6 +97,9 @@ go build -o kithli-api
 - `go test ./...` - Run tests
 - `go vet ./...` - Run Go vet
 
+### Database
+For database migrations this project uses [https://github.com/pressly/goose]
+
 ## Deployment Instructions
 
 ### Environment Setup
