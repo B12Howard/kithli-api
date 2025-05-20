@@ -12,6 +12,8 @@ import (
 
 // NewDb initializes a PostgreSQL database connection
 func NewDb() *sql.DB {
+	var psqlString string
+	
 	// Load .env only in local development
 	if os.Getenv("RENDER") == "" { // Render does not set "RENDER" env, so this ensures .env is only loaded locally
 		err := godotenv.Load(".env")
@@ -20,6 +22,10 @@ func NewDb() *sql.DB {
 		} else {
 			log.Println(".env file loaded successfully.")
 		}
+
+		psqlString = "host=%s port=%s user=%s password=%s dbname=%s sslmode=disable"
+	} else {
+		psqlString = "host=%s port=%s user=%s password=%s dbname=%s sslmode=require"
 	}
 
 	// Retrieve environment variables
@@ -35,7 +41,7 @@ func NewDb() *sql.DB {
 
 	// Create the PostgreSQL connection string
 	psqlInfo := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=require prefer_simple_protocol=1",
+		psqlString,
 		host, port, user, password, dbname,
 	)
 
