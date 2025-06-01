@@ -129,4 +129,4 @@ The client application is part of the Kithli project repository.
 ![Kithli Architecture](https://user-images.githubusercontent.com/39282569/196551643-9d64515f-128e-4c8c-af39-071ce5d43226.png)
 
  ### Running Tests
- To run unit tests use `go test YOURDIRECTORY`. Example: Tetst are in the service directory. If I wanted to run all of them I would run `go test ./services/... -v`
+ To run unit tests use `go test YOURDIRECTORY`. Example: Tests are in the service directory. If I wanted to run all of them I would run `go test ./services/... -v`
