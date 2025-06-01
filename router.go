@@ -12,6 +12,7 @@ import (
 	// customMiddleware "kithli-api/router/custom_middleware"
 	"kithli-api/firebase" // Import AuthMiddleware package
 	"kithli-api/services"
+	"kithli-api/services/member"
 
 	// "log"
 	// "net/http"
@@ -128,7 +129,7 @@ func NewRoutes(router *chi.Mux, db *sql.DB, firebaseClient *firebase.FirebaseCli
 			router.Post("/", services.CreateUserHandler(db, firebaseClient))
 		})
 		router.Route("/create-member", func(router chi.Router) {
-			router.Post("/", services.CreateMemberHandler(db))
+			router.Post("/", member.CreateMemberHandler(db))
 		})
 		// router.Use(Auth(firebaseClient))
 		router.Route("/getUser", func(router chi.Router) {
