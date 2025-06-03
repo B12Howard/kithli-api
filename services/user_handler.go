@@ -8,10 +8,12 @@ import (
 	"kithli-api/firebase"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"firebase.google.com/go/auth"
 	"github.com/go-chi/render"
+	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -52,6 +54,18 @@ type UserRequest struct {
 	LastName    string `json:"lastName"`
 	PostalCode  string `json:"postalCode"`
 	PhoneNumber string `json:"phoneNumber"`
+}
+
+func extractFirebaseErrorCode(err error) string {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "EMAIL_EXISTS"):
+		return "EMAIL_EXISTS"
+	case strings.Contains(msg, "INVALID_PASSWORD"):
+		return "INVALID_PASSWORD"
+	default:
+		return "UNKNOWN_ERROR"
+	}
 }
 
 func GetUser(db *sql.DB) func(http.ResponseWriter, *http.Request) {
@@ -125,7 +139,10 @@ func CreateUserHandler(db *sql.DB, firebaseClient *firebase.FirebaseClient) http
 		log.Printf("hello!")
 		var req UserRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Invalid request payload"})
 			return
 		}
 		fmt.Printf("request body %+v", req)
@@ -141,7 +158,26 @@ func CreateUserHandler(db *sql.DB, firebaseClient *firebase.FirebaseClient) http
 
 			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 			if err != nil {
-				http.Error(w, "Error hashing password: "+err.Error(), http.StatusInternalServerError)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{
+					"error": "Error hashing password: " + err.Error()})
+				return
+			}
+
+			var existingID int
+			checkPhoneErr := db.QueryRowContext(ctx, `SELECT id FROM users WHERE phone = $1`, req.PhoneNumber).Scan(&existingID)
+
+			if checkPhoneErr == nil {
+				// Phone number already exists
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": map[string]interface{}{
+						"code":    http.StatusBadRequest,
+						"message": "Phone number already in use",
+					},
+				})
 				return
 			}
 
@@ -158,7 +194,15 @@ func CreateUserHandler(db *sql.DB, firebaseClient *firebase.FirebaseClient) http
 			log.Printf("after firebase auth")
 
 			if err != nil {
-				http.Error(w, "Error creating user: "+err.Error(), http.StatusInternalServerError)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": map[string]interface{}{
+						"code":    http.StatusBadRequest,
+						"message": "Could not create an account: " + strings.ToLower(extractFirebaseErrorCode(err)),
+					},
+				})
+
 				return
 			}
 
@@ -179,13 +223,19 @@ func CreateUserHandler(db *sql.DB, firebaseClient *firebase.FirebaseClient) http
 			// Verify token and extract user info
 			token, err := firebaseClient.FirebaseAuth.VerifyIDToken(ctx, req.Token)
 			if err != nil {
-				http.Error(w, "Invalid token: "+err.Error(), http.StatusUnauthorized)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{
+					"error": "Invalid token"})
 				return
 			}
 
 			emailClaim, emailExists := token.Claims["email"]
 			if !emailExists {
-				http.Error(w, "Email not found in token", http.StatusBadRequest)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{
+					"error": "Email not found in token"})
 				return
 			}
 
@@ -194,7 +244,10 @@ func CreateUserHandler(db *sql.DB, firebaseClient *firebase.FirebaseClient) http
 			firebaseUID = token.UID
 
 		default:
-			http.Error(w, "Unsupported provider", http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Unsupported provider"})
 			return
 		}
 
@@ -205,20 +258,29 @@ func CreateUserHandler(db *sql.DB, firebaseClient *firebase.FirebaseClient) http
 		RETURNING id`, email, passwordHash, emailConfirmed, false, firebaseUID, req.FirstName, req.LastName, req.PostalCode, req.PhoneNumber,
 		).Scan(&userID)
 
-		fmt.Printf("%d", userID)
-
 		if dbErr != nil {
-			http.Error(w, "Error creating user: "+dbErr.Error(), http.StatusInternalServerError)
+			var errMsg string
+
+			if pqErr, ok := dbErr.(*pq.Error); ok {
+				// Example fields: pqErr.Code, pqErr.Message, pqErr.Detail, pqErr.Constraint
+				errMsg = fmt.Sprintf("Error creating user: %s", pqErr.Message)
+			} else {
+				errMsg = "Error creating user: " + dbErr.Error()
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": errMsg,
+			})
 			return
 		}
 
-		response := json.NewEncoder(w).Encode(map[string]string{
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
 			"uid":   firebaseUID,
 			"email": email,
 		})
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-		log.Println("[INFO] User registered successfully:", response)
+		log.Println("[INFO] User registered successfully:", firebaseUID, email)
 	}
 }

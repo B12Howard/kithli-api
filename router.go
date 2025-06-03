@@ -7,15 +7,12 @@ import (
 	"net/http"
 	"strings"
 
-	// "fmt"
-
-	// customMiddleware "kithli-api/router/custom_middleware"
-	"kithli-api/firebase" // Import AuthMiddleware package
+	"kithli-api/firebase"
+	"kithli-api/handlers"
+	"kithli-api/repositories"
 	"kithli-api/services"
 	"kithli-api/services/member"
-
-	// "log"
-	// "net/http"
+	"kithli-api/services/user"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -23,16 +20,6 @@ import (
 	// "github.com/gorilla/websocket"
 )
 
-// var FirebaseAuth *auth.Client
-
-// func setupFirebaseAuth() {
-// 	app := FirebaseApp
-// 	client, err := app.Auth(context.Background())
-// 	if err != nil {
-// 		log.Fatalf("Error initializing Firebase Auth client: %v", err)
-// 	}
-// 	FirebaseAuth = client
-// }
 type ContextKey string
 
 const UserIDKey ContextKey = "user_id"
@@ -84,78 +71,36 @@ func NewRoutes(router *chi.Mux, db *sql.DB, firebaseClient *firebase.FirebaseCli
 		AllowedOrigins: []string{"https://*", "http://*"},
 		// AllowedOrigins: []string{"https://app.kithli.com"},
 		// AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: false,
 		MaxAge:           300, // Maximum value not ignored by any of major browsers
 	}))
 
-	// router.Route("/ws/{userId}", func(router chi.Router) {
-	// 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-	// 		var upgrader = websocket.Upgrader{
-	// 			ReadBufferSize:  1024,
-	// 			WriteBufferSize: 1024,
-	// 		}
-	// 		upgrader.CheckOrigin = func(r *http.Request) bool { return true }
-	// 		userId := chi.URLParam(r, "userId")
-	// 		fmt.Println("userId", userId)
-	// 		connection, err := upgrader.Upgrade(w, r, nil)
-	// 		if err != nil {
-	// 			log.Println(err)
-	// 			return
-	// 		}
+	userRepo := repositories.NewUserRepository(db)
+	userService := user.NewUserService(userRepo)
 
-	// 		services.CreateNewSocketUser(hub, connection, userId)
+	memberService := member.NewMemberService(db)
 
-	// 	})
-	// 	router.Post("/", func(w http.ResponseWriter, r *http.Request) {
-	// 		userId := chi.URLParam(r, "userId")
-	// 		var socketEventResponse services.SocketEventStruct
-	// 		socketEventResponse.EventName = "message response"
-	// 		socketEventResponse.EventPayload = map[string]interface{}{
-	// 			"username": "usernamestuff",
-	// 			"message":  "file is complete",
-	// 			"userID":   userId,
-	// 		}
-	// 		services.EmitToSpecificClient(hub, socketEventResponse, userId)
-
-	// 	})
-	// })
-
-	
 	router.Group(func(router chi.Router) {
 		router.Route("/create-user", func(router chi.Router) {
 			router.Post("/", services.CreateUserHandler(db, firebaseClient))
 		})
 		router.Route("/create-member", func(router chi.Router) {
-			router.Post("/", member.CreateMemberHandler(db))
+			router.Post("/", handlers.CreateMemberHandler(memberService))
 		})
-		// router.Use(Auth(firebaseClient))
+		router.Route("/update-member", func(router chi.Router) {
+			router.Patch("/", handlers.UpdateMemberHandler(memberService))
+		})
 		router.Route("/getUser", func(router chi.Router) {
 			router.Post("/", services.GetUser(db))
-			// Example if not passing in to Auth
-			// router.With(AuthMiddleware(firebaseClient)).Post("/create-user", CreateUserHandler(firebaseClient))
-			// router.Post("/getGifs", services.GetUserGifs(db))
-			// router.Delete("/deleteGif", services.DeleteGifById(db))
-			// router.Post("/getUsage", services.GetUserUsage(db))
 		})
-
-		// router.Route("/useConverter", func(router chi.Router) {
-		// 	router.Post("/convertVIdeosToGifsStitchTogether", services.ConvertVIdeosToGifsStitchTogether())
-		// 	router.Post("/convertVideoToGif", services.ConvertVideoToGif(hub, db))
-		// })
-
-		// router.Route("/getSignedUrlGif", func(router chi.Router) {
-		// 	router.Post("/", services.GetUserImage(db))
-		// })
-
 		router.Route("/check-membership", func(router chi.Router) {
 			router.Post("/", services.CheckUserMembershipHandler(db))
 		})
-
 		router.Route("/get-user-data", func(router chi.Router) {
-			router.With(AuthMiddleware(firebaseClient)).Get("/{external_id}", services.GetUserDataHandler(db, firebaseClient))
+			router.With(AuthMiddleware(firebaseClient)).Get("/{external_id}", handlers.GetUserDataHandler(userService, firebaseClient))
 		})
 
 	})

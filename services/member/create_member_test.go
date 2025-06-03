@@ -2,7 +2,6 @@ package member_test
 
 import (
 	"bytes"
-	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -11,8 +10,8 @@ import (
 	"testing"
 
 	"fmt"
+	"kithli-api/handlers"
 	"kithli-api/models"
-	"kithli-api/repositories"
 	"kithli-api/services/member"
 	"os"
 
@@ -54,41 +53,18 @@ func setupTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func TestCreateMemberHandler_Rollback(t *testing.T) {
+func strPtr(s string) *string {
+	return &s
+}
+
+func TestCreateMemberHandler_Success(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	// Start a transaction to be rolled back
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tx.Rollback() // Ensures test doesn't persist data
+	service := member.NewMemberService(db)
 
-	// Wrap the service handler with the mocked transaction
-	repo := repositories.NewMemberRepository(tx)
-	service := member.NewMemberService(repo)
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req models.MemberRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
-			return
-		}
-
-		memberID, err := service.CreateMember(r.Context(), req)
-		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
-
-			return
-		}
-
-		json.NewEncoder(w).Encode(map[string]any{
-			"member_id": memberID,
-			"message":   "success",
-		})
-	})
+	// Set up the handler using the actual HTTP handler function
+	handler := handlers.CreateMemberHandler(service)
 
 	// Create a request payload
 	reqBody := models.MemberRequest{
@@ -102,21 +78,19 @@ func TestCreateMemberHandler_Rollback(t *testing.T) {
 		State:                 strPtr("CA"),
 		AdditionalInformation: strPtr("No allergies"),
 	}
-	
-	jsonBody, _ := json.Marshal(reqBody)
 
+	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		t.Fatalf("failed to marshal request: %v", err)
 	}
 
 	req := httptest.NewRequest("POST", "/create-member", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
-
-	// Record the response
 	rr := httptest.NewRecorder()
+
 	handler.ServeHTTP(rr, req)
 
-	// Assert
+	// Expect success
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
 	}
@@ -126,11 +100,11 @@ func TestCreateMemberHandler_Rollback(t *testing.T) {
 		t.Fatal("Failed to parse JSON response:", err)
 	}
 
-	if res["message"] != "success" {
+	if res["message"] != "Member created successfully" {
 		t.Errorf("unexpected message: %v", res["message"])
 	}
-}
 
-func strPtr(s string) *string {
-	return &s
+	if res["member_id"] == nil {
+		t.Errorf("expected member_id to be returned, got nil")
+	}
 }

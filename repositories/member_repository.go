@@ -11,6 +11,8 @@ type IMemberRepository interface {
 	InsertMember(ctx context.Context, m *models.Member) (int, error)
 	LinkAddress(ctx context.Context, memberID, addressID int) error
 	UpdateUserMember(ctx context.Context, uid string, memberID int) error
+	UpdateAddress(ctx context.Context, addr *models.Address, addressID int) error
+	UpdateMember(ctx context.Context, m *models.Member, memberID int) (int, error)
 }
 
 type memberRepository struct {
@@ -50,5 +52,21 @@ func (r *memberRepository) UpdateUserMember(ctx context.Context, uid string, mem
 	_, err := r.Tx.ExecContext(ctx, `
 		UPDATE users SET member = $1 WHERE external_id = $2
 	`, memberID, uid)
+	return err
+}
+
+func (r *memberRepository) UpdateMember(ctx context.Context, m *models.Member, memberID int) (int, error) {
+	var id int
+	err := r.Tx.QueryRowContext(ctx, `
+		UPDATE members SET my_headline = $1, about_me = $2, additional_information = $3 WHERE id = $4
+		RETURNING id
+	`, m.MyHeadline, m.AboutMe, m.AdditionalInformation, memberID).Scan(&id)
+	return id, err
+}
+
+func (r *memberRepository) UpdateAddress(ctx context.Context, addr *models.Address, addressID int) error {
+	_, err := r.Tx.ExecContext(ctx, `
+		UPDATE addresses SET postal_code = $1, street = $2, apt_number = $3, city = $4, state = $5 WHERE id = $6
+	`, addr.PostalCode, addr.Street, addr.AptNumber, addr.City, addr.State, addressID)
 	return err
 }
