@@ -11,4 +11,6 @@ type MemberRequest struct {
 	City                  *string `json:"city,omitempty"`
 	State                 *string `json:"state,omitempty"`
 	AdditionalInformation *string `json:"additionalInformation,omitempty"`
+	MemberID              *int    `json:"memberId,omitempty"`
+	AddressID             *int    `json:"addressId,omitempty"`
 }
